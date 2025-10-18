@@ -36,6 +36,81 @@ log_error() {
     echo -e "${RED}[错误]${NC} $1"
 }
 
+# 进度条函数
+show_progress() {
+    local current=$1
+    local total=$2
+    local task_name=$3
+    local percent=$((current * 100 / total))
+    local completed=$((current * 50 / total))
+    local remaining=$((50 - completed))
+    
+    # 构建进度条
+    local bar=""
+    for ((i=0; i<completed; i++)); do
+        bar="${bar}█"
+    done
+    for ((i=0; i<remaining; i++)); do
+        bar="${bar}░"
+    done
+    
+    # 显示进度
+    echo -ne "\r${CYAN}[${bar}]${NC} ${BOLD}${percent}%${NC} ${task_name}  "
+    
+    # 完成时换行
+    if [ $current -eq $total ]; then
+        echo -e "\n"
+    fi
+}
+
+# 带进度条的任务执行
+run_with_progress() {
+    local task_name=$1
+    local task_command=$2
+    
+    echo ""
+    echo -e "${BOLD}${CYAN}▶${NC} 正在执行: ${YELLOW}${task_name}${NC}"
+    echo ""
+    
+    # 启动任务
+    eval "$task_command" &
+    local pid=$!
+    
+    # 显示动态进度条
+    local spinner=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local i=0
+    
+    while kill -0 $pid 2>/dev/null; do
+        echo -ne "\r${CYAN}${spinner[$i]}${NC} 处理中... ${GRAY}(PID: $pid)${NC}  "
+        i=$(( (i+1) % 10 ))
+        sleep 0.1
+    done
+    
+    wait $pid
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        echo -e "\r${GREEN}✓${NC} ${task_name} ${GREEN}完成${NC}                          "
+    else
+        echo -e "\r${RED}✗${NC} ${task_name} ${RED}失败${NC} (退出码: $exit_code)                "
+    fi
+    
+    return $exit_code
+}
+
+# 步骤进度显示
+show_step() {
+    local step=$1
+    local total=$2
+    local title=$3
+    
+    echo ""
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${GREEN}步骤 [$step/$total]${NC} ${YELLOW}$title${NC}"
+    echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
 # 显示标题
 show_header() {
     clear
@@ -1722,67 +1797,217 @@ show_menu() {
         
         case $choice in
             0)
-                # 基础优化
+                clear
+                echo ""
+                echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BOLD}${CYAN}║${NC}              ${GREEN}🚀 开始一键优化 VPS 服务器 🚀${NC}                 ${BOLD}${CYAN}║${NC}"
+                echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+                echo ""
+                
+                # 统计总步骤数
+                local total_steps=8
+                local current_step=0
+                
+                # 基础优化 (8步)
+                ((current_step++))
+                show_step $current_step $total_steps "换源加速"
+                show_progress $current_step $total_steps "换源优化..."
                 optimize_sources
+                
+                ((current_step++))
+                show_step $current_step $total_steps "账户安全配置"
+                show_progress $current_step $total_steps "配置账户安全..."
                 setup_security
+                
+                ((current_step++))
+                show_step $current_step $total_steps "SSH安全加固"
+                show_progress $current_step $total_steps "加固SSH安全..."
                 harden_ssh
+                
+                ((current_step++))
+                show_step $current_step $total_steps "防火墙配置"
+                show_progress $current_step $total_steps "配置防火墙..."
                 setup_firewall
+                
+                ((current_step++))
+                show_step $current_step $total_steps "系统性能优化"
+                show_progress $current_step $total_steps "优化系统性能..."
                 optimize_performance
+                
+                ((current_step++))
+                show_step $current_step $total_steps "时间同步配置"
+                show_progress $current_step $total_steps "配置时间同步..."
                 setup_time_sync
+                
+                ((current_step++))
+                show_step $current_step $total_steps "安全加固"
+                show_progress $current_step $total_steps "加固系统安全..."
                 security_hardening
+                
+                ((current_step++))
+                show_step $current_step $total_steps "系统清理"
+                show_progress $current_step $total_steps "清理系统..."
                 system_cleanup
                 
-                # 可选的高级配置
+                # 基础优化完成提示
                 echo ""
-                log_info "基础优化完成，是否继续配置环境?"
+                echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo -e "${BOLD}${GREEN}✓${NC} 基础优化已完成！${GREEN}(8/8)${NC}"
+                echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo ""
+                
+                # 可选的高级配置
+                log_info "是否继续配置环境? (可选功能)"
+                echo ""
+                
                 read -p "配置Docker环境? (y/n): " do_docker
-                [[ "$do_docker" == "y" ]] && setup_docker
+                if [[ "$do_docker" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 配置 Docker 环境..."
+                    setup_docker
+                fi
                 
                 read -p "配置Nginx? (y/n): " do_nginx
-                [[ "$do_nginx" == "y" ]] && setup_nginx
+                if [[ "$do_nginx" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 配置 Nginx..."
+                    setup_nginx
+                fi
                 
                 read -p "安装常用工具? (y/n): " do_tools
-                [[ "$do_tools" == "y" ]] && install_useful_tools
+                if [[ "$do_tools" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 安装常用工具..."
+                    install_useful_tools
+                fi
                 
                 read -p "配置自动备份? (y/n): " do_backup
-                [[ "$do_backup" == "y" ]] && setup_backup
+                if [[ "$do_backup" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 配置自动备份..."
+                    setup_backup
+                fi
                 
                 read -p "配置系统监控? (y/n): " do_monitor
-                [[ "$do_monitor" == "y" ]] && setup_monitoring
+                if [[ "$do_monitor" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 配置系统监控..."
+                    setup_monitoring
+                fi
                 
                 read -p "优化SSH连接速度? (y/n): " do_ssh_speed
-                [[ "$do_ssh_speed" == "y" ]] && optimize_ssh_speed
+                if [[ "$do_ssh_speed" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 优化SSH连接速度..."
+                    optimize_ssh_speed
+                fi
                 
                 read -p "安装BBR V3终极优化? (y/n): " do_bbr_v3
-                [[ "$do_bbr_v3" == "y" ]] && install_bbr_v3
+                if [[ "$do_bbr_v3" == "y" ]]; then
+                    echo ""
+                    echo -e "${YELLOW}▶${NC} 安装BBR V3终极优化..."
+                    install_bbr_v3
+                fi
+                
+                echo ""
+                echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo -e "${BOLD}${GREEN}✓ 所有优化已完成！${NC}"
+                echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo ""
                 
                 verify_setup
                 show_completion
                 break
                 ;;
-            1) optimize_sources ;;
-            2) setup_security ;;
-            3) harden_ssh ;;
-            4) setup_firewall ;;
-            5) optimize_performance ;;
-            6) setup_time_sync ;;
-            7) security_hardening ;;
-            8) system_cleanup ;;
-            9) setup_docker ;;
-            10) setup_nginx ;;
-            11) install_useful_tools ;;
-            12) setup_backup ;;
-            13) setup_monitoring ;;
-            14) optimize_ssh_speed ;;
-            15) install_bbr_v3 ;;
-            v|V) verify_setup ; read -p "按回车继续..." ;;
+            1) 
+                show_step 1 1 "换源加速"
+                optimize_sources 
+                read -p "按回车继续..."
+                ;;
+            2) 
+                show_step 1 1 "账户安全配置"
+                setup_security 
+                read -p "按回车继续..."
+                ;;
+            3) 
+                show_step 1 1 "SSH安全加固"
+                harden_ssh 
+                read -p "按回车继续..."
+                ;;
+            4) 
+                show_step 1 1 "防火墙配置"
+                setup_firewall 
+                read -p "按回车继续..."
+                ;;
+            5) 
+                show_step 1 1 "系统性能优化"
+                optimize_performance 
+                read -p "按回车继续..."
+                ;;
+            6) 
+                show_step 1 1 "时间同步配置"
+                setup_time_sync 
+                read -p "按回车继续..."
+                ;;
+            7) 
+                show_step 1 1 "安全加固"
+                security_hardening 
+                read -p "按回车继续..."
+                ;;
+            8) 
+                show_step 1 1 "系统清理"
+                system_cleanup 
+                read -p "按回车继续..."
+                ;;
+            9) 
+                show_step 1 1 "Docker环境配置"
+                setup_docker 
+                read -p "按回车继续..."
+                ;;
+            10) 
+                show_step 1 1 "Nginx配置与SSL证书"
+                setup_nginx 
+                read -p "按回车继续..."
+                ;;
+            11) 
+                show_step 1 1 "安装常用工具"
+                install_useful_tools 
+                read -p "按回车继续..."
+                ;;
+            12) 
+                show_step 1 1 "配置自动备份"
+                setup_backup 
+                read -p "按回车继续..."
+                ;;
+            13) 
+                show_step 1 1 "配置系统监控告警"
+                setup_monitoring 
+                read -p "按回车继续..."
+                ;;
+            14) 
+                show_step 1 1 "优化SSH连接速度"
+                optimize_ssh_speed 
+                read -p "按回车继续..."
+                ;;
+            15) 
+                show_step 1 1 "BBR V3 终极优化"
+                install_bbr_v3 
+                read -p "按回车继续..."
+                ;;
+            v|V) 
+                show_step 1 1 "验证配置"
+                verify_setup 
+                read -p "按回车继续..." 
+                ;;
             q|Q) 
-                log_info "退出脚本"
+                echo ""
+                log_info "感谢使用 VPS 优化脚本！👋"
+                echo ""
                 exit 0
                 ;;
             *)
-                log_error "无效选项"
-                sleep 1
+                log_error "无效选项，请重新选择"
+                sleep 2
                 ;;
         esac
     done
