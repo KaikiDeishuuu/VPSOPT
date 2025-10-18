@@ -146,14 +146,14 @@ nginx -s reload             # 重载配置
 
 **v2.0** (2025-10-19) - [查看详情](docs/CHANGELOG.md)
 
-- ✨ 新增 7 大实用功能（Docker/Nginx/工具/备份/监控/SSH优化/BBR V3）
+- ✨ 新增 7 大实用功能（Docker/Nginx/工具/备份/监控/SSH 优化/BBR V3）
 - 🎨 优化菜单结构和交互体验
 - 📝 完善文档系统
-- ⭐ 集成 BBR V3 终极网络优化（功能15）
+- ⭐ 集成 BBR V3 终极网络优化（功能 15）
 
 ## 🚀 BBR V3 终极优化 ⭐
 
-脚本已集成 [Eric86777 的 BBR V3 优化](https://github.com/Eric86777/vps-tcp-tune) 作为**功能15**！
+脚本已集成 [Eric86777 的 BBR V3 优化](https://github.com/Eric86777/vps-tcp-tune) 作为**功能 15**！
 
 在脚本菜单中选择 `15` 即可一键安装 BBR V3 优化。
 
