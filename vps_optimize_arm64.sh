@@ -373,9 +373,10 @@ show_menu_arm64() {
         echo ""
         echo -e "  ${BOLD}1${NC})  📦 系统基础优化 (换源/安全/性能)"
         echo -e "  ${BOLD}2${NC})  🔧 ARM64特定优化 (性能/温度/内存)"
-        echo -e "  ${BOLD}3${NC})  🐳 Docker环境 (ARM64版)"
-        echo -e "  ${BOLD}4${NC})  ☁️  Cloudflare服务 (Tunnel/WARP)"
-        echo -e "  ${BOLD}5${NC})  🌐 网络优化工具"
+        echo -e "  ${BOLD}3${NC})  🌍 语言与时间配置 (Locale/时区/NTP)"
+        echo -e "  ${BOLD}4${NC})  🐳 Docker环境 (ARM64版)"
+        echo -e "  ${BOLD}5${NC})  ☁️  Cloudflare服务 (Tunnel/WARP)"
+        echo -e "  ${BOLD}6${NC})  🌐 网络优化工具"
         echo ""
         echo -e "  ${BOLD}v${NC})  ✅ 验证配置"
         echo -e "  ${BOLD}q${NC})  🚪 退出脚本"
@@ -396,6 +397,13 @@ show_menu_arm64() {
                 setup_firewall 2>/dev/null || log_warning "防火墙跳过"
                 optimize_performance 2>/dev/null || log_warning "性能优化跳过"
                 
+                # 语言和时间配置
+                read -p "配置系统语言? (y/n): " do_locale
+                [[ "$do_locale" == "y" ]] && setup_locale 2>/dev/null
+                
+                read -p "配置时间同步? (y/n): " do_time
+                [[ "$do_time" == "y" ]] && setup_time_sync 2>/dev/null
+                
                 # ARM64特定优化
                 arm64_specific_optimizations
                 
@@ -415,10 +423,21 @@ show_menu_arm64() {
                 read -p "按回车继续..."
                 ;;
             3)
-                setup_docker_arm64
+                # 语言与时间配置
+                echo ""
+                read -p "配置系统语言? (y/n): " do_locale
+                [[ "$do_locale" == "y" ]] && setup_locale 2>/dev/null
+                
+                read -p "配置时间同步? (y/n): " do_time
+                [[ "$do_time" == "y" ]] && setup_time_sync 2>/dev/null
+                
                 read -p "按回车继续..."
                 ;;
             4)
+                setup_docker_arm64
+                read -p "按回车继续..."
+                ;;
+            5)
                 echo ""
                 read -p "配置Cloudflare Tunnel? (y/n): " do_cf
                 [[ "$do_cf" == "y" ]] && setup_cloudflare_tunnel 2>/dev/null
@@ -428,7 +447,7 @@ show_menu_arm64() {
                 
                 read -p "按回车继续..."
                 ;;
-            5)
+            6)
                 setup_network_optimization 2>/dev/null
                 read -p "按回车继续..."
                 ;;

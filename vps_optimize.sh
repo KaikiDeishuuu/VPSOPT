@@ -608,7 +608,82 @@ EOF
     sleep 2
 }
 
-# 6. 时间同步
+# 6. 系统语言配置
+setup_locale() {
+    log_info "开始配置系统语言..."
+    
+    echo ""
+    echo "请选择系统语言（Locale）："
+    echo "1) zh_CN.UTF-8 (简体中文 - UTF-8)"
+    echo "2) en_US.UTF-8 (美国英语 - UTF-8)"
+    echo "3) zh_TW.UTF-8 (繁体中文 - UTF-8)"
+    echo "4) ja_JP.UTF-8 (日本语 - UTF-8)"
+    echo "5) 自定义"
+    echo "6) 跳过语言设置"
+    read -p "请输入选项 [1-6]: " locale_choice
+    
+    case $locale_choice in
+        1)
+            LOCALE="zh_CN.UTF-8"
+            ;;
+        2)
+            LOCALE="en_US.UTF-8"
+            ;;
+        3)
+            LOCALE="zh_TW.UTF-8"
+            ;;
+        4)
+            LOCALE="ja_JP.UTF-8"
+            ;;
+        5)
+            read -p "请输入Locale (例如: en_GB.UTF-8): " LOCALE
+            ;;
+        6)
+            log_info "跳过语言设置"
+            return
+            ;;
+        *)
+            log_warning "无效选项，使用默认配置"
+            return
+            ;;
+    esac
+    
+    # 安装locales包
+    log_info "安装locales包..."
+    apt-get install -y locales >/dev/null 2>&1
+    
+    # 生成locale
+    log_info "生成locale: $LOCALE"
+    
+    # 确保locale在/etc/locale.gen中未被注释
+    sed -i "s/^# *${LOCALE}/${LOCALE}/" /etc/locale.gen 2>/dev/null
+    
+    # 如果locale不存在，添加它
+    if ! grep -q "^${LOCALE}" /etc/locale.gen 2>/dev/null; then
+        echo "${LOCALE} UTF-8" >> /etc/locale.gen
+    fi
+    
+    # 生成locale
+    locale-gen >/dev/null 2>&1
+    
+    # 设置系统默认locale
+    update-locale LANG=$LOCALE LC_ALL=$LOCALE LANGUAGE=${LOCALE%%.*} >/dev/null 2>&1
+    
+    # 同时更新/etc/default/locale
+    cat > /etc/default/locale <<EOF
+LANG=$LOCALE
+LANGUAGE=${LOCALE%%.*}
+LC_ALL=$LOCALE
+EOF
+    
+    log_success "系统语言已设置为: $LOCALE"
+    log_info "当前locale: $(locale | grep LANG= | cut -d'=' -f2)"
+    log_warning "语言设置将在重新登录后完全生效"
+    
+    sleep 2
+}
+
+# 7. 时间同步
 setup_time_sync() {
     log_info "开始配置时间同步..."
     
@@ -618,16 +693,31 @@ setup_time_sync() {
     echo "1) Asia/Shanghai (中国 - 推荐)"
     echo "2) Asia/Hong_Kong (香港)"
     echo "3) Asia/Tokyo (日本)"
-    echo "4) UTC (协调世界时)"
-    echo "5) 跳过时区设置"
-    read -p "请输入选项 [1-5]: " timezone_choice
+    echo "4) America/New_York (美国东部)"
+    echo "5) Europe/London (英国)"
+    echo "6) UTC (协调世界时)"
+    echo "7) 自定义"
+    echo "8) 跳过时区设置"
+    read -p "请输入选项 [1-8]: " timezone_choice
     
     case $timezone_choice in
         1) timedatectl set-timezone Asia/Shanghai ;;
         2) timedatectl set-timezone Asia/Hong_Kong ;;
         3) timedatectl set-timezone Asia/Tokyo ;;
-        4) timedatectl set-timezone UTC ;;
-        5) log_info "跳过时区设置" ;;
+        4) timedatectl set-timezone America/New_York ;;
+        5) timedatectl set-timezone Europe/London ;;
+        6) timedatectl set-timezone UTC ;;
+        7) 
+            echo ""
+            log_info "可用时区列表: timedatectl list-timezones"
+            read -p "请输入时区 (例如: Asia/Singapore): " custom_timezone
+            if timedatectl set-timezone "$custom_timezone" 2>/dev/null; then
+                log_success "时区已设置为: $custom_timezone"
+            else
+                log_error "无效的时区，保持当前设置"
+            fi
+            ;;
+        8) log_info "跳过时区设置" ;;
         *) log_warning "无效选项，使用默认时区" ;;
     esac
     
@@ -2152,6 +2242,1076 @@ install_network_tools() {
     echo "  tcpdump -i eth0          - 抓包分析"
 }
 
+# 20. 性能基准测试
+performance_benchmark() {
+    log_info "开始性能基准测试..."
+    
+    echo ""
+    echo -e "${YELLOW}性能基准测试工具:${NC}"
+    echo "1) Superbench - 综合测试 (推荐)"
+    echo "2) YABS - Yet Another Bench Script"
+    echo "3) Bench.sh - 经典测试脚本"
+    echo "4) UnixBench - 深度性能测试"
+    echo "5) 自定义测试组合"
+    echo "6) 全部运行 (耗时较长)"
+    read -p "请选择 [1-6]: " bench_choice
+    
+    case $bench_choice in
+        1)
+            run_superbench
+            ;;
+        2)
+            run_yabs
+            ;;
+        3)
+            run_bench_sh
+            ;;
+        4)
+            run_unixbench
+            ;;
+        5)
+            run_custom_benchmark
+            ;;
+        6)
+            log_info "运行全部测试..."
+            run_superbench
+            run_yabs
+            run_bench_sh
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    log_success "性能测试完成"
+}
+
+# Superbench测试
+run_superbench() {
+    log_info "运行Superbench综合测试..."
+    echo ""
+    echo -e "${CYAN}测试内容: CPU/内存/硬盘IO/网络${NC}"
+    echo ""
+    
+    if curl -fsL https://raw.githubusercontent.com/oooldking/script/master/superbench.sh | bash; then
+        log_success "Superbench测试完成"
+    else
+        log_error "Superbench测试失败"
+    fi
+}
+
+# YABS测试
+run_yabs() {
+    log_info "运行YABS测试..."
+    echo ""
+    echo -e "${CYAN}测试内容: CPU/硬盘/网络速度${NC}"
+    echo ""
+    
+    if curl -sL yabs.sh | bash; then
+        log_success "YABS测试完成"
+    else
+        log_error "YABS测试失败"
+    fi
+}
+
+# Bench.sh测试
+run_bench_sh() {
+    log_info "运行Bench.sh测试..."
+    echo ""
+    echo -e "${CYAN}测试内容: 系统信息/IO/网速${NC}"
+    echo ""
+    
+    if wget -qO- bench.sh | bash; then
+        log_success "Bench.sh测试完成"
+    else
+        log_error "Bench.sh测试失败"
+    fi
+}
+
+# UnixBench测试
+run_unixbench() {
+    log_info "运行UnixBench深度测试..."
+    echo ""
+    echo -e "${YELLOW}警告: 此测试耗时较长 (15-30分钟)${NC}"
+    read -p "是否继续? (y/n): " continue_test
+    
+    if [[ "$continue_test" != "y" ]]; then
+        return
+    fi
+    
+    # 安装依赖
+    apt-get install -y gcc make perl perl-modules >/dev/null 2>&1
+    
+    # 下载并运行
+    cd /tmp
+    wget https://github.com/kdlucas/byte-unixbench/archive/v5.1.3.tar.gz
+    tar -xzf v5.1.3.tar.gz
+    cd byte-unixbench-5.1.3/UnixBench
+    ./Run
+    
+    log_success "UnixBench测试完成"
+}
+
+# 自定义测试
+run_custom_benchmark() {
+    log_info "自定义性能测试..."
+    
+    echo ""
+    echo "选择要测试的项目:"
+    
+    read -p "测试CPU性能? (y/n): " test_cpu
+    if [[ "$test_cpu" == "y" ]]; then
+        log_info "CPU性能测试..."
+        echo ""
+        
+        # 安装sysbench
+        if ! command -v sysbench >/dev/null 2>&1; then
+            apt-get install -y sysbench >/dev/null 2>&1
+        fi
+        
+        echo -e "${CYAN}单核测试:${NC}"
+        sysbench cpu --cpu-max-prime=20000 --threads=1 run
+        
+        echo ""
+        echo -e "${CYAN}多核测试:${NC}"
+        CORES=$(nproc)
+        sysbench cpu --cpu-max-prime=20000 --threads=$CORES run
+    fi
+    
+    read -p "测试硬盘IO? (y/n): " test_io
+    if [[ "$test_io" == "y" ]]; then
+        log_info "硬盘IO测试..."
+        echo ""
+        
+        # dd写入测试
+        echo -e "${CYAN}写入速度测试:${NC}"
+        dd if=/dev/zero of=/tmp/test_write bs=1M count=1024 conv=fdatasync 2>&1 | tail -1
+        
+        # dd读取测试
+        echo ""
+        echo -e "${CYAN}读取速度测试:${NC}"
+        dd if=/tmp/test_write of=/dev/null bs=1M 2>&1 | tail -1
+        
+        rm -f /tmp/test_write
+        
+        # fio测试(如果可用)
+        if command -v fio >/dev/null 2>&1; then
+            echo ""
+            echo -e "${CYAN}FIO随机读写测试:${NC}"
+            fio --name=random-rw --ioengine=libaio --iodepth=32 --rw=randrw --rwmixread=70 --bs=4k --direct=1 --size=1G --numjobs=4 --runtime=60 --group_reporting
+        fi
+    fi
+    
+    read -p "测试网络速度? (y/n): " test_network
+    if [[ "$test_network" == "y" ]]; then
+        log_info "网络速度测试..."
+        echo ""
+        
+        # 安装speedtest-cli
+        if ! command -v speedtest-cli >/dev/null 2>&1; then
+            apt-get install -y speedtest-cli >/dev/null 2>&1
+        fi
+        
+        if command -v speedtest-cli >/dev/null 2>&1; then
+            speedtest-cli --simple
+        else
+            log_warning "speedtest-cli安装失败"
+        fi
+    fi
+    
+    read -p "测试国内网络延迟? (y/n): " test_ping
+    if [[ "$test_ping" == "y" ]]; then
+        log_info "测试国内主要城市延迟..."
+        echo ""
+        
+        declare -A CITIES=(
+            ["北京"]="www.baidu.com"
+            ["上海"]="www.aliyun.com"
+            ["广州"]="www.tencent.com"
+            ["香港"]="www.hkex.com.hk"
+        )
+        
+        for city in "${!CITIES[@]}"; do
+            host="${CITIES[$city]}"
+            echo -n "$city: "
+            ping -c 4 "$host" 2>/dev/null | tail -1 | awk '{print $4}' | cut -d'/' -f2 | xargs echo "ms"
+        done
+    fi
+    
+    log_success "自定义测试完成"
+}
+
+# 21. 邮件告警配置
+setup_email_alerts() {
+    log_info "开始配置邮件告警..."
+    
+    echo ""
+    echo -e "${YELLOW}邮件告警功能说明:${NC}"
+    echo "可以在系统异常时自动发送邮件通知"
+    echo ""
+    echo "支持的邮件服务:"
+    echo "1) Gmail"
+    echo "2) QQ邮箱"
+    echo "3) 163邮箱"
+    echo "4) 阿里云邮箱"
+    echo "5) 自定义SMTP服务器"
+    echo "6) 跳过配置"
+    read -p "请选择 [1-6]: " email_choice
+    
+    case $email_choice in
+        1)
+            setup_gmail_smtp
+            ;;
+        2)
+            setup_qq_smtp
+            ;;
+        3)
+            setup_163_smtp
+            ;;
+        4)
+            setup_aliyun_smtp
+            ;;
+        5)
+            setup_custom_smtp
+            ;;
+        6)
+            log_info "跳过邮件配置"
+            return
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    # 配置告警脚本
+    setup_alert_scripts
+    
+    log_success "邮件告警配置完成"
+}
+
+# Gmail SMTP配置
+setup_gmail_smtp() {
+    log_info "配置Gmail SMTP..."
+    
+    # 安装msmtp
+    apt-get install -y msmtp msmtp-mta mailutils >/dev/null 2>&1
+    
+    read -p "请输入Gmail地址: " gmail_user
+    read -sp "请输入Gmail应用专用密码: " gmail_pass
+    echo ""
+    
+    # 配置msmtp
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        gmail
+host           smtp.gmail.com
+port           587
+from           ${gmail_user}
+user           ${gmail_user}
+password       ${gmail_pass}
+
+account default : gmail
+EOF
+    
+    chmod 600 /etc/msmtprc
+    
+    # 测试发送
+    echo "系统邮件告警测试" | mail -s "VPS告警测试" "$gmail_user"
+    
+    log_success "Gmail SMTP配置完成"
+}
+
+# QQ邮箱SMTP配置
+setup_qq_smtp() {
+    log_info "配置QQ邮箱SMTP..."
+    
+    apt-get install -y msmtp msmtp-mta mailutils >/dev/null 2>&1
+    
+    read -p "请输入QQ邮箱: " qq_user
+    read -sp "请输入QQ邮箱授权码: " qq_pass
+    echo ""
+    
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        qq
+host           smtp.qq.com
+port           587
+from           ${qq_user}
+user           ${qq_user}
+password       ${qq_pass}
+
+account default : qq
+EOF
+    
+    chmod 600 /etc/msmtprc
+    
+    echo "系统邮件告警测试" | mail -s "VPS告警测试" "$qq_user"
+    
+    log_success "QQ邮箱SMTP配置完成"
+}
+
+# 163邮箱SMTP配置
+setup_163_smtp() {
+    log_info "配置163邮箱SMTP..."
+    
+    apt-get install -y msmtp msmtp-mta mailutils >/dev/null 2>&1
+    
+    read -p "请输入163邮箱: " email_163
+    read -sp "请输入163邮箱授权码: " pass_163
+    echo ""
+    
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        163
+host           smtp.163.com
+port           587
+from           ${email_163}
+user           ${email_163}
+password       ${pass_163}
+
+account default : 163
+EOF
+    
+    chmod 600 /etc/msmtprc
+    
+    echo "系统邮件告警测试" | mail -s "VPS告警测试" "$email_163"
+    
+    log_success "163邮箱SMTP配置完成"
+}
+
+# 阿里云邮箱SMTP配置
+setup_aliyun_smtp() {
+    log_info "配置阿里云邮箱SMTP..."
+    
+    apt-get install -y msmtp msmtp-mta mailutils >/dev/null 2>&1
+    
+    read -p "请输入阿里云邮箱: " aliyun_email
+    read -sp "请输入邮箱密码: " aliyun_pass
+    echo ""
+    
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        aliyun
+host           smtp.aliyun.com
+port           465
+tls_starttls   off
+from           ${aliyun_email}
+user           ${aliyun_email}
+password       ${aliyun_pass}
+
+account default : aliyun
+EOF
+    
+    chmod 600 /etc/msmtprc
+    
+    echo "系统邮件告警测试" | mail -s "VPS告警测试" "$aliyun_email"
+    
+    log_success "阿里云邮箱SMTP配置完成"
+}
+
+# 自定义SMTP配置
+setup_custom_smtp() {
+    log_info "配置自定义SMTP..."
+    
+    apt-get install -y msmtp msmtp-mta mailutils >/dev/null 2>&1
+    
+    read -p "SMTP服务器地址: " smtp_host
+    read -p "SMTP端口 (通常587或465): " smtp_port
+    read -p "发件人邮箱: " smtp_from
+    read -p "用户名: " smtp_user
+    read -sp "密码: " smtp_pass
+    echo ""
+    read -p "使用TLS? (y/n): " use_tls
+    
+    cat > /etc/msmtprc <<EOF
+defaults
+auth           on
+logfile        /var/log/msmtp.log
+
+account        custom
+host           ${smtp_host}
+port           ${smtp_port}
+from           ${smtp_from}
+user           ${smtp_user}
+password       ${smtp_pass}
+EOF
+    
+    if [[ "$use_tls" == "y" ]]; then
+        cat >> /etc/msmtprc <<EOF
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+EOF
+    fi
+    
+    echo "account default : custom" >> /etc/msmtprc
+    
+    chmod 600 /etc/msmtprc
+    
+    read -p "输入接收测试邮件的地址: " test_email
+    echo "系统邮件告警测试" | mail -s "VPS告警测试" "$test_email"
+    
+    log_success "自定义SMTP配置完成"
+}
+
+# 配置告警脚本
+setup_alert_scripts() {
+    log_info "配置告警监控脚本..."
+    
+    # 获取告警邮箱
+    read -p "请输入接收告警的邮箱地址: " alert_email
+    
+    # 创建告警脚本
+    cat > /usr/local/bin/system_alert.sh <<EOF
+#!/bin/bash
+
+# 告警邮箱
+ALERT_EMAIL="${alert_email}"
+
+# 阈值设置
+CPU_THRESHOLD=80
+MEM_THRESHOLD=80
+DISK_THRESHOLD=85
+LOAD_THRESHOLD=5.0
+
+# 获取系统信息
+HOSTNAME=\$(hostname)
+CPU_USAGE=\$(top -bn1 | grep "Cpu(s)" | awk '{print \$2}' | cut -d'%' -f1 | cut -d'.' -f1)
+MEM_USAGE=\$(free | grep Mem | awk '{printf("%.0f", \$3/\$2 * 100.0)}')
+DISK_USAGE=\$(df -h / | tail -1 | awk '{print \$5}' | cut -d'%' -f1)
+LOAD_AVG=\$(uptime | awk -F'load average:' '{print \$2}' | awk '{print \$1}' | cut -d',' -f1)
+
+# CPU告警
+if [ "\$CPU_USAGE" -gt "\$CPU_THRESHOLD" ]; then
+    echo "服务器: \$HOSTNAME
+CPU使用率过高: \${CPU_USAGE}%
+时间: \$(date '+%Y-%m-%d %H:%M:%S')" | mail -s "⚠️ CPU告警 - \$HOSTNAME" "\$ALERT_EMAIL"
+fi
+
+# 内存告警
+if [ "\$MEM_USAGE" -gt "\$MEM_THRESHOLD" ]; then
+    echo "服务器: \$HOSTNAME
+内存使用率过高: \${MEM_USAGE}%
+时间: \$(date '+%Y-%m-%d %H:%M:%S')" | mail -s "⚠️ 内存告警 - \$HOSTNAME" "\$ALERT_EMAIL"
+fi
+
+# 磁盘告警
+if [ "\$DISK_USAGE" -gt "\$DISK_THRESHOLD" ]; then
+    echo "服务器: \$HOSTNAME
+磁盘使用率过高: \${DISK_USAGE}%
+时间: \$(date '+%Y-%m-%d %H:%M:%S')" | mail -s "⚠️ 磁盘告警 - \$HOSTNAME" "\$ALERT_EMAIL"
+fi
+
+# 系统负载告警
+if (( \$(echo "\$LOAD_AVG > \$LOAD_THRESHOLD" | bc -l) )); then
+    echo "服务器: \$HOSTNAME
+系统负载过高: \${LOAD_AVG}
+时间: \$(date '+%Y-%m-%d %H:%M:%S')" | mail -s "⚠️ 负载告警 - \$HOSTNAME" "\$ALERT_EMAIL"
+fi
+
+# 检查关键服务
+SERVICES=("ssh" "nginx" "docker")
+for service in "\${SERVICES[@]}"; do
+    if systemctl list-unit-files | grep -q "^\${service}.service" 2>/dev/null; then
+        if ! systemctl is-active --quiet "\$service" 2>/dev/null; then
+            echo "服务器: \$HOSTNAME
+服务停止: \${service}
+时间: \$(date '+%Y-%m-%d %H:%M:%S')" | mail -s "⚠️ 服务告警 - \$HOSTNAME" "\$ALERT_EMAIL"
+        fi
+    fi
+done
+EOF
+    
+    chmod +x /usr/local/bin/system_alert.sh
+    
+    # 添加到crontab (每10分钟检查一次)
+    (crontab -l 2>/dev/null | grep -v "system_alert.sh"; echo "*/10 * * * * /usr/local/bin/system_alert.sh") | crontab -
+    
+    log_success "告警脚本配置完成"
+    log_info "告警邮件将发送到: $alert_email"
+    log_info "检查间隔: 每10分钟"
+}
+
+# 22. 数据库一键部署
+setup_database() {
+    log_info "开始配置数据库环境..."
+    
+    echo ""
+    echo -e "${YELLOW}数据库部署选项:${NC}"
+    echo "1) MySQL 8.0 (最流行)"
+    echo "2) MariaDB (MySQL分支)"
+    echo "3) PostgreSQL (企业级)"
+    echo "4) Redis (缓存数据库)"
+    echo "5) MongoDB (文档数据库)"
+    echo "6) 多个数据库组合"
+    echo "7) 返回"
+    read -p "请选择 [1-7]: " db_choice
+    
+    case $db_choice in
+        1) install_mysql ;;
+        2) install_mariadb ;;
+        3) install_postgresql ;;
+        4) install_redis ;;
+        5) install_mongodb ;;
+        6) install_multiple_databases ;;
+        7) return ;;
+        *) log_warning "无效选项" ;;
+    esac
+    
+    log_success "数据库配置完成"
+}
+
+# 安装MySQL
+install_mysql() {
+    log_info "安装MySQL 8.0..."
+    
+    # 安装MySQL
+    apt-get update >/dev/null 2>&1
+    apt-get install -y mysql-server
+    
+    # 启动MySQL
+    systemctl enable mysql >/dev/null 2>&1
+    systemctl start mysql
+    
+    log_success "MySQL安装完成"
+    
+    # 安全配置
+    echo ""
+    read -p "是否进行安全配置? (y/n): " secure_mysql
+    if [[ "$secure_mysql" == "y" ]]; then
+        log_info "开始MySQL安全配置..."
+        
+        read -sp "设置root密码: " mysql_root_pass
+        echo ""
+        
+        # 设置root密码并配置安全选项
+        mysql <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${mysql_root_pass}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+        
+        log_success "MySQL安全配置完成"
+        
+        # 保存密码
+        echo "MySQL root密码: $mysql_root_pass" >> /root/vps_setup_info.txt
+        chmod 600 /root/vps_setup_info.txt
+    fi
+    
+    # 创建数据库
+    echo ""
+    read -p "是否创建新数据库? (y/n): " create_db
+    if [[ "$create_db" == "y" ]]; then
+        read -p "数据库名称: " db_name
+        read -p "数据库用户: " db_user
+        read -sp "用户密码: " db_pass
+        echo ""
+        
+        mysql -u root -p"${mysql_root_pass}" <<EOF
+CREATE DATABASE IF NOT EXISTS ${db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${db_user}'@'localhost' IDENTIFIED BY '${db_pass}';
+GRANT ALL PRIVILEGES ON ${db_name}.* TO '${db_user}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+        
+        log_success "数据库创建完成: $db_name"
+        echo "数据库: $db_name, 用户: $db_user, 密码: $db_pass" >> /root/vps_setup_info.txt
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}MySQL信息:${NC}"
+    echo "版本: $(mysql --version)"
+    echo "状态: $(systemctl is-active mysql)"
+    echo "配置文件: /etc/mysql/mysql.conf.d/mysqld.cnf"
+}
+
+# 安装MariaDB
+install_mariadb() {
+    log_info "安装MariaDB..."
+    
+    apt-get update >/dev/null 2>&1
+    apt-get install -y mariadb-server mariadb-client
+    
+    systemctl enable mariadb >/dev/null 2>&1
+    systemctl start mariadb
+    
+    log_success "MariaDB安装完成"
+    
+    # 安全配置
+    echo ""
+    read -p "运行安全配置向导? (y/n): " run_secure
+    if [[ "$run_secure" == "y" ]]; then
+        mysql_secure_installation
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}MariaDB信息:${NC}"
+    echo "版本: $(mysql --version)"
+    echo "状态: $(systemctl is-active mariadb)"
+}
+
+# 安装PostgreSQL
+install_postgresql() {
+    log_info "安装PostgreSQL..."
+    
+    # 添加PostgreSQL仓库
+    apt-get install -y gnupg2 wget >/dev/null 2>&1
+    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+    echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+    
+    # 安装PostgreSQL
+    apt-get update >/dev/null 2>&1
+    apt-get install -y postgresql postgresql-contrib
+    
+    systemctl enable postgresql >/dev/null 2>&1
+    systemctl start postgresql
+    
+    log_success "PostgreSQL安装完成"
+    
+    # 创建用户和数据库
+    echo ""
+    read -p "是否创建数据库和用户? (y/n): " create_pg_db
+    if [[ "$create_pg_db" == "y" ]]; then
+        read -p "数据库名称: " pg_dbname
+        read -p "用户名称: " pg_user
+        read -sp "用户密码: " pg_pass
+        echo ""
+        
+        sudo -u postgres psql <<EOF
+CREATE DATABASE ${pg_dbname};
+CREATE USER ${pg_user} WITH ENCRYPTED PASSWORD '${pg_pass}';
+GRANT ALL PRIVILEGES ON DATABASE ${pg_dbname} TO ${pg_user};
+EOF
+        
+        log_success "PostgreSQL数据库创建完成"
+        echo "PostgreSQL - 数据库: $pg_dbname, 用户: $pg_user, 密码: $pg_pass" >> /root/vps_setup_info.txt
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}PostgreSQL信息:${NC}"
+    echo "版本: $(sudo -u postgres psql --version)"
+    echo "状态: $(systemctl is-active postgresql)"
+    echo "配置: /etc/postgresql/*/main/postgresql.conf"
+}
+
+# 安装Redis
+install_redis() {
+    log_info "安装Redis..."
+    
+    apt-get update >/dev/null 2>&1
+    apt-get install -y redis-server
+    
+    # 配置Redis
+    sed -i 's/^supervised no/supervised systemd/' /etc/redis/redis.conf
+    
+    systemctl enable redis-server >/dev/null 2>&1
+    systemctl restart redis-server
+    
+    log_success "Redis安装完成"
+    
+    # 安全配置
+    echo ""
+    read -p "是否设置Redis密码? (推荐) (y/n): " set_redis_pass
+    if [[ "$set_redis_pass" == "y" ]]; then
+        read -sp "设置Redis密码: " redis_pass
+        echo ""
+        
+        # 设置密码
+        sed -i "s/^# requirepass foobared/requirepass ${redis_pass}/" /etc/redis/redis.conf
+        
+        systemctl restart redis-server
+        
+        log_success "Redis密码设置完成"
+        echo "Redis密码: $redis_pass" >> /root/vps_setup_info.txt
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Redis信息:${NC}"
+    echo "版本: $(redis-server --version)"
+    echo "状态: $(systemctl is-active redis-server)"
+    echo "端口: 6379"
+    echo "配置: /etc/redis/redis.conf"
+}
+
+# 安装MongoDB
+install_mongodb() {
+    log_info "安装MongoDB..."
+    
+    # 导入MongoDB GPG密钥
+    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+    
+    # 添加MongoDB仓库
+    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/debian $(lsb_release -cs)/mongodb-org/6.0 main" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+    
+    # 安装MongoDB
+    apt-get update >/dev/null 2>&1
+    apt-get install -y mongodb-org
+    
+    systemctl enable mongod >/dev/null 2>&1
+    systemctl start mongod
+    
+    log_success "MongoDB安装完成"
+    
+    echo ""
+    echo -e "${YELLOW}MongoDB信息:${NC}"
+    echo "版本: $(mongod --version | head -1)"
+    echo "状态: $(systemctl is-active mongod)"
+    echo "端口: 27017"
+    echo "配置: /etc/mongod.conf"
+}
+
+# 安装多个数据库
+install_multiple_databases() {
+    echo ""
+    echo "选择要安装的数据库 (可多选):"
+    
+    read -p "安装MySQL? (y/n): " install_mysql_choice
+    read -p "安装PostgreSQL? (y/n): " install_pg_choice
+    read -p "安装Redis? (y/n): " install_redis_choice
+    read -p "安装MongoDB? (y/n): " install_mongo_choice
+    
+    [[ "$install_mysql_choice" == "y" ]] && install_mysql
+    [[ "$install_pg_choice" == "y" ]] && install_postgresql
+    [[ "$install_redis_choice" == "y" ]] && install_redis
+    [[ "$install_mongo_choice" == "y" ]] && install_mongodb
+    
+    log_success "数据库组合安装完成"
+}
+
+# 23. 开发环境管理
+setup_dev_environment() {
+    log_info "开始配置开发环境..."
+    
+    echo ""
+    echo -e "${YELLOW}开发环境选项:${NC}"
+    echo "1) Python环境 (pyenv + pip)"
+    echo "2) Node.js环境 (nvm + npm)"
+    echo "3) Go语言环境"
+    echo "4) Java环境 (OpenJDK)"
+    echo "5) 全栈环境 (Python + Node.js)"
+    echo "6) 返回"
+    read -p "请选择 [1-6]: " dev_choice
+    
+    case $dev_choice in
+        1) setup_python_env ;;
+        2) setup_nodejs_env ;;
+        3) setup_go_env ;;
+        4) setup_java_env ;;
+        5) 
+            setup_python_env
+            setup_nodejs_env
+            ;;
+        6) return ;;
+        *) log_warning "无效选项" ;;
+    esac
+    
+    log_success "开发环境配置完成"
+}
+
+# 配置Python环境
+setup_python_env() {
+    log_info "配置Python开发环境..."
+    
+    # 安装依赖
+    apt-get install -y build-essential libssl-dev zlib1g-dev \
+        libbz2-dev libreadline-dev libsqlite3-dev curl \
+        libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev \
+        libffi-dev liblzma-dev git >/dev/null 2>&1
+    
+    # 安装pyenv
+    if [ ! -d "$HOME/.pyenv" ]; then
+        log_info "安装pyenv..."
+        curl https://pyenv.run | bash
+        
+        # 配置环境变量
+        cat >> ~/.bashrc <<'EOF'
+
+# pyenv configuration
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+EOF
+        
+        # 立即生效
+        export PYENV_ROOT="$HOME/.pyenv"
+        export PATH="$PYENV_ROOT/bin:$PATH"
+        eval "$(pyenv init -)"
+        
+        log_success "pyenv安装完成"
+    else
+        log_info "pyenv已安装"
+    fi
+    
+    # 安装Python版本
+    echo ""
+    read -p "是否安装Python? (y/n): " install_python
+    if [[ "$install_python" == "y" ]]; then
+        echo ""
+        echo "常用Python版本:"
+        echo "1) Python 3.11 (最新稳定版)"
+        echo "2) Python 3.10"
+        echo "3) Python 3.9"
+        echo "4) 自定义版本"
+        read -p "请选择 [1-4]: " py_version_choice
+        
+        case $py_version_choice in
+            1) PY_VERSION="3.11.0" ;;
+            2) PY_VERSION="3.10.0" ;;
+            3) PY_VERSION="3.9.0" ;;
+            4) read -p "输入Python版本 (如3.11.0): " PY_VERSION ;;
+            *) PY_VERSION="3.11.0" ;;
+        esac
+        
+        log_info "安装Python $PY_VERSION..."
+        $HOME/.pyenv/bin/pyenv install $PY_VERSION
+        $HOME/.pyenv/bin/pyenv global $PY_VERSION
+        
+        log_success "Python $PY_VERSION 安装完成"
+    fi
+    
+    # 安装常用包
+    echo ""
+    read -p "是否安装常用Python包? (y/n): " install_packages
+    if [[ "$install_packages" == "y" ]]; then
+        log_info "安装常用包..."
+        $HOME/.pyenv/shims/pip install --upgrade pip
+        $HOME/.pyenv/shims/pip install virtualenv pipenv poetry requests flask django fastapi
+        log_success "常用包安装完成"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Python环境信息:${NC}"
+    echo "pyenv版本: $($HOME/.pyenv/bin/pyenv --version 2>/dev/null || echo '需要重新登录')"
+    echo "Python版本: $($HOME/.pyenv/shims/python --version 2>/dev/null || echo '需要重新登录')"
+    echo ""
+    echo -e "${CYAN}使用方法:${NC}"
+    echo "  pyenv install 3.11.0  - 安装Python版本"
+    echo "  pyenv global 3.11.0   - 设置全局版本"
+    echo "  pyenv versions        - 查看已安装版本"
+}
+
+# 配置Node.js环境
+setup_nodejs_env() {
+    log_info "配置Node.js开发环境..."
+    
+    # 安装nvm
+    if [ ! -d "$HOME/.nvm" ]; then
+        log_info "安装nvm..."
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+        
+        # 配置环境变量
+        cat >> ~/.bashrc <<'EOF'
+
+# nvm configuration
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+EOF
+        
+        # 立即生效
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        log_success "nvm安装完成"
+    else
+        log_info "nvm已安装"
+    fi
+    
+    # 安装Node.js
+    echo ""
+    read -p "是否安装Node.js? (y/n): " install_node
+    if [[ "$install_node" == "y" ]]; then
+        echo ""
+        echo "Node.js版本选择:"
+        echo "1) Node.js 20 LTS (推荐)"
+        echo "2) Node.js 18 LTS"
+        echo "3) Node.js 最新版"
+        echo "4) 自定义版本"
+        read -p "请选择 [1-4]: " node_version_choice
+        
+        # 加载nvm
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        case $node_version_choice in
+            1) 
+                log_info "安装Node.js 20 LTS..."
+                nvm install 20
+                nvm use 20
+                nvm alias default 20
+                ;;
+            2) 
+                log_info "安装Node.js 18 LTS..."
+                nvm install 18
+                nvm use 18
+                nvm alias default 18
+                ;;
+            3) 
+                log_info "安装最新版Node.js..."
+                nvm install node
+                nvm use node
+                nvm alias default node
+                ;;
+            4) 
+                read -p "输入Node.js版本 (如18.17.0): " NODE_VERSION
+                nvm install $NODE_VERSION
+                nvm use $NODE_VERSION
+                nvm alias default $NODE_VERSION
+                ;;
+        esac
+        
+        log_success "Node.js安装完成"
+    fi
+    
+    # 配置npm镜像
+    echo ""
+    read -p "是否配置npm淘宝镜像? (国内推荐) (y/n): " set_npm_mirror
+    if [[ "$set_npm_mirror" == "y" ]]; then
+        npm config set registry https://registry.npmmirror.com
+        log_success "npm镜像配置完成"
+    fi
+    
+    # 安装常用全局包
+    echo ""
+    read -p "是否安装常用全局包? (y/n): " install_npm_packages
+    if [[ "$install_npm_packages" == "y" ]]; then
+        log_info "安装常用包..."
+        npm install -g yarn pnpm pm2 typescript ts-node nodemon
+        log_success "常用包安装完成"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Node.js环境信息:${NC}"
+    echo "nvm版本: $(nvm --version 2>/dev/null || echo '需要重新登录')"
+    echo "Node.js版本: $(node --version 2>/dev/null || echo '需要重新登录')"
+    echo "npm版本: $(npm --version 2>/dev/null || echo '需要重新登录')"
+    echo ""
+    echo -e "${CYAN}使用方法:${NC}"
+    echo "  nvm install 20    - 安装Node.js 20"
+    echo "  nvm use 20        - 使用Node.js 20"
+    echo "  nvm ls            - 查看已安装版本"
+}
+
+# 配置Go环境
+setup_go_env() {
+    log_info "配置Go语言环境..."
+    
+    # 获取最新版本
+    GO_VERSION="1.21.0"
+    
+    echo ""
+    read -p "安装Go $GO_VERSION? (y/n): " install_go
+    if [[ "$install_go" != "y" ]]; then
+        return
+    fi
+    
+    # 下载Go
+    log_info "下载Go $GO_VERSION..."
+    cd /tmp
+    wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+    
+    # 安装Go
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+    
+    # 配置环境变量
+    cat >> ~/.bashrc <<'EOF'
+
+# Go configuration
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+EOF
+    
+    # 立即生效
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=$HOME/go
+    
+    log_success "Go安装完成"
+    
+    # 配置国内代理
+    echo ""
+    read -p "是否配置Go国内代理? (y/n): " set_go_proxy
+    if [[ "$set_go_proxy" == "y" ]]; then
+        go env -w GO111MODULE=on
+        go env -w GOPROXY=https://goproxy.cn,direct
+        log_success "Go代理配置完成"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Go环境信息:${NC}"
+    echo "Go版本: $(go version 2>/dev/null || echo '需要重新登录')"
+    echo "GOPATH: $GOPATH"
+}
+
+# 配置Java环境
+setup_java_env() {
+    log_info "配置Java开发环境..."
+    
+    echo ""
+    echo "Java版本选择:"
+    echo "1) OpenJDK 17 (LTS, 推荐)"
+    echo "2) OpenJDK 11 (LTS)"
+    echo "3) OpenJDK 8 (LTS, 旧项目)"
+    read -p "请选择 [1-3]: " java_version_choice
+    
+    case $java_version_choice in
+        1)
+            apt-get install -y openjdk-17-jdk openjdk-17-jre
+            ;;
+        2)
+            apt-get install -y openjdk-11-jdk openjdk-11-jre
+            ;;
+        3)
+            apt-get install -y openjdk-8-jdk openjdk-8-jre
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    log_success "Java安装完成"
+    
+    # 安装Maven
+    echo ""
+    read -p "是否安装Maven? (y/n): " install_maven
+    if [[ "$install_maven" == "y" ]]; then
+        apt-get install -y maven
+        log_success "Maven安装完成"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Java环境信息:${NC}"
+    echo "Java版本: $(java -version 2>&1 | head -1)"
+    echo "Maven版本: $(mvn -version 2>&1 | head -1 || echo '未安装')"
+}
+
 # 验证配置
 verify_setup() {
     show_header
@@ -2315,37 +3475,50 @@ show_completion() {
 show_menu() {
     while true; do
         show_header
-        echo -e "${BOLD}${CYAN}📋 请选择要执行的优化项目：${NC}"
+        echo -e "${BOLD}${CYAN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${BOLD}${CYAN}║${NC}               ${BOLD}📋 请选择要执行的优化项目${NC}                    ${BOLD}${CYAN}║${NC}"
+        echo -e "${BOLD}${CYAN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
-        echo -e "  ${GREEN}┌─────────────────────────────────────────────────────────┐${NC}"
-        echo -e "  ${GREEN}│${NC} ${BOLD}${GREEN}⚡ 一键优化${NC}                                            ${GREEN}│${NC}"
-        echo -e "  ${GREEN}└─────────────────────────────────────────────────────────┘${NC}"
-        echo -e "    ${BOLD}0${NC})  ${CYAN}🚀 执行全部优化${NC} ${GRAY}(推荐新手，一键搞定)${NC}"
+        echo -e "  ${GREEN}╔═════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${GREEN}║${NC}  ${BOLD}${GREEN}⚡ 一键优化${NC}                                                    ${GREEN}║${NC}"
+        echo -e "  ${GREEN}╚═════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "    ${BOLD}${WHITE} 0)${NC}  ${CYAN}🚀 执行全部优化${NC} ${GRAY}(推荐新手，一键完成所有基础配置)${NC}"
         echo ""
-        echo -e "  ${BLUE}┌─────────────────────────────────────────────────────────┐${NC}"
-        echo -e "  ${BLUE}│${NC} ${BOLD}${BLUE}🔧 基础优化${NC}                                            ${BLUE}│${NC}"
-        echo -e "  ${BLUE}└─────────────────────────────────────────────────────────┘${NC}"
-        echo -e "    ${BOLD}1${NC})  📦 换源加速                 ${BOLD}5${NC})  ⚙️  系统性能优化"
-        echo -e "    ${BOLD}2${NC})  👤 账户安全配置             ${BOLD}6${NC})  🕐 时间同步配置"
-        echo -e "    ${BOLD}3${NC})  🔐 SSH安全加固              ${BOLD}7${NC})  🛡️  安全加固 (Fail2Ban)"
-        echo -e "    ${BOLD}4${NC})  🔥 防火墙配置                ${BOLD}8${NC})  🧹 系统清理"
+        echo -e "  ${BLUE}╔═════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${BLUE}║${NC}  ${BOLD}${BLUE}🔧 基础优化 (功能 1-9)${NC}                                        ${BLUE}║${NC}"
+        echo -e "  ${BLUE}╚═════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "    ${BOLD}${WHITE} 1)${NC}  📦 换源加速            ${BOLD}${WHITE} 6)${NC}  🌍 系统语言配置"
+        echo -e "    ${BOLD}${WHITE} 2)${NC}  👤 账户安全配置        ${BOLD}${WHITE} 7)${NC}  🕐 时间同步配置"
+        echo -e "    ${BOLD}${WHITE} 3)${NC}  🔐 SSH安全加固         ${BOLD}${WHITE} 8)${NC}  🛡️  安全加固 (Fail2Ban)"
+        echo -e "    ${BOLD}${WHITE} 4)${NC}  🔥 防火墙配置          ${BOLD}${WHITE} 9)${NC}  🧹 系统清理"
+        echo -e "    ${BOLD}${WHITE} 5)${NC}  ⚙️  系统性能优化"
         echo ""
-        echo -e "  ${YELLOW}┌─────────────────────────────────────────────────────────┐${NC}"
-        echo -e "  ${YELLOW}│${NC} ${BOLD}${YELLOW}🌟 环境配置${NC}                                            ${YELLOW}│${NC}"
-        echo -e "  ${YELLOW}└─────────────────────────────────────────────────────────┘${NC}"
-        echo -e "    ${BOLD}9${NC})  🐳 Docker环境配置            ${BOLD}14${NC}) ⚡ 优化SSH连接速度"
-        echo -e "    ${BOLD}10${NC}) 🌐 Nginx配置与SSL证书        ${BOLD}15${NC}) ${RED}${BOLD}🚀 BBR V3 终极优化 ⭐${NC}"
-        echo -e "    ${BOLD}11${NC}) 🛠️  安装常用工具             ${BOLD}16${NC}) ${CYAN}${BOLD}☁️  Cloudflare Tunnel 🆕${NC}"
-        echo -e "    ${BOLD}12${NC}) 💾 配置自动备份              ${BOLD}17${NC}) ${CYAN}${BOLD}🔒 Cloudflare WARP 🆕${NC}"
-        echo -e "    ${BOLD}13${NC}) 📊 配置系统监控告警          ${BOLD}18${NC}) ${CYAN}${BOLD}🌐 网络优化工具集 🆕${NC}"
+        echo -e "  ${YELLOW}╔═════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${YELLOW}║${NC}  ${BOLD}${YELLOW}🌟 环境配置 (功能 10-20)${NC}                                      ${YELLOW}║${NC}"
+        echo -e "  ${YELLOW}╚═════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "    ${BOLD}${WHITE}10)${NC}  🐳 Docker环境配置      ${BOLD}${WHITE}16)${NC}  ${RED}🚀 BBR V3 终极优化 ⭐${NC}"
+        echo -e "    ${BOLD}${WHITE}11)${NC}  🌐 Nginx+SSL证书       ${BOLD}${WHITE}17)${NC}  ☁️  Cloudflare Tunnel"
+        echo -e "    ${BOLD}${WHITE}12)${NC}  🛠️  安装常用工具       ${BOLD}${WHITE}18)${NC}  🔒 Cloudflare WARP"
+        echo -e "    ${BOLD}${WHITE}13)${NC}  💾 配置自动备份        ${BOLD}${WHITE}19)${NC}  🌐 网络优化工具集"
+        echo -e "    ${BOLD}${WHITE}14)${NC}  📊 系统监控告警        ${BOLD}${WHITE}20)${NC}  ${GREEN}📈 性能基准测试 ⭐${NC}"
+        echo -e "    ${BOLD}${WHITE}15)${NC}  ⚡ SSH连接优化"
         echo ""
-        echo -e "  ${PURPLE}┌─────────────────────────────────────────────────────────┐${NC}"
-        echo -e "  ${PURPLE}│${NC} ${BOLD}${PURPLE}📚 其他选项${NC}                                            ${PURPLE}│${NC}"
-        echo -e "  ${PURPLE}└─────────────────────────────────────────────────────────┘${NC}"
-        echo -e "    ${BOLD}v${NC})  ✅ 验证配置                  ${BOLD}q${NC})  🚪 退出脚本"
+        echo -e "  ${PURPLE}╔═════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${PURPLE}║${NC}  ${BOLD}${PURPLE}🎯 高级功能 (功能 21-28)${NC}                                      ${PURPLE}║${NC}"
+        echo -e "  ${PURPLE}╚═════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "    ${BOLD}${WHITE}21)${NC}  📧 邮件告警配置        ${BOLD}${WHITE}25)${NC}  💾 系统快照与恢复"
+        echo -e "    ${BOLD}${WHITE}22)${NC}  🗄️  数据库一键部署     ${BOLD}${WHITE}26)${NC}  🛡️  入侵检测系统"
+        echo -e "    ${BOLD}${WHITE}23)${NC}  🔧 开发环境管理        ${BOLD}${WHITE}27)${NC}  📊 流量监控"
+        echo -e "    ${BOLD}${WHITE}24)${NC}  🌐 反向代理管理        ${BOLD}${WHITE}28)${NC}  📁 文件同步服务"
         echo ""
-        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -n -e "${BOLD}${CYAN}➤${NC} 请输入选项: "
+        echo -e "  ${GRAY}╔═════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${GRAY}║${NC}  ${BOLD}${WHITE}📚 其他选项${NC}                                                    ${GRAY}║${NC}"
+        echo -e "  ${GRAY}╚═════════════════════════════════════════════════════════════════╝${NC}"
+        echo -e "    ${BOLD}${WHITE} e)${NC}  🌟 扩展功能菜单        ${BOLD}${WHITE} v)${NC}  ✅ 验证配置"
+        echo -e "    ${BOLD}${WHITE} l)${NC}  🔍 日志分析            ${BOLD}${WHITE} q)${NC}  🚪 退出脚本"
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -n -e "${BOLD}${CYAN}➤${NC} 请输入选项编号: "
         read choice
         
         case $choice in
@@ -2358,7 +3531,7 @@ show_menu() {
                 echo ""
                 
                 # 统计总步骤数
-                local total_steps=8
+                local total_steps=9
                 local current_step=0
                 
                 # 基础优化 (8步)
@@ -2388,6 +3561,11 @@ show_menu() {
                 optimize_performance
                 
                 ((current_step++))
+                show_step $current_step $total_steps "系统语言配置"
+                show_progress $current_step $total_steps "配置系统语言..."
+                setup_locale
+                
+                ((current_step++))
                 show_step $current_step $total_steps "时间同步配置"
                 show_progress $current_step $total_steps "配置时间同步..."
                 setup_time_sync
@@ -2405,7 +3583,7 @@ show_menu() {
                 # 基础优化完成提示
                 echo ""
                 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-                echo -e "${BOLD}${GREEN}✓${NC} 基础优化已完成！${GREEN}(8/8)${NC}"
+                echo -e "${BOLD}${GREEN}✓${NC} 基础优化已完成！${GREEN}(9/9)${NC}"
                 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
                 echo ""
                 
@@ -2498,68 +3676,133 @@ show_menu() {
                 read -p "按回车继续..."
                 ;;
             6) 
+                show_step 1 1 "系统语言配置"
+                setup_locale 
+                read -p "按回车继续..."
+                ;;
+            7) 
                 show_step 1 1 "时间同步配置"
                 setup_time_sync 
                 read -p "按回车继续..."
                 ;;
-            7) 
+            8) 
                 show_step 1 1 "安全加固"
                 security_hardening 
                 read -p "按回车继续..."
                 ;;
-            8) 
+            9) 
                 show_step 1 1 "系统清理"
                 system_cleanup 
                 read -p "按回车继续..."
                 ;;
-            9) 
+            10) 
                 show_step 1 1 "Docker环境配置"
                 setup_docker 
                 read -p "按回车继续..."
                 ;;
-            10) 
+            11) 
                 show_step 1 1 "Nginx配置与SSL证书"
                 setup_nginx 
                 read -p "按回车继续..."
                 ;;
-            11) 
+            12) 
                 show_step 1 1 "安装常用工具"
                 install_useful_tools 
                 read -p "按回车继续..."
                 ;;
-            12) 
+            13) 
                 show_step 1 1 "配置自动备份"
                 setup_backup 
                 read -p "按回车继续..."
                 ;;
-            13) 
+            14) 
                 show_step 1 1 "配置系统监控告警"
                 setup_monitoring 
                 read -p "按回车继续..."
                 ;;
-            14) 
+            15) 
                 show_step 1 1 "优化SSH连接速度"
                 optimize_ssh_speed 
                 read -p "按回车继续..."
                 ;;
-            15) 
+            16) 
                 show_step 1 1 "BBR V3 终极优化"
                 install_bbr_v3 
                 read -p "按回车继续..."
                 ;;
-            16) 
+            17) 
                 show_step 1 1 "Cloudflare Tunnel配置"
                 setup_cloudflare_tunnel 
                 read -p "按回车继续..."
                 ;;
-            17) 
+            18) 
                 show_step 1 1 "Cloudflare WARP配置"
                 setup_cloudflare_warp 
                 read -p "按回车继续..."
                 ;;
-            18) 
+            19) 
                 show_step 1 1 "网络优化工具集"
                 setup_network_optimization 
+                read -p "按回车继续..."
+                ;;
+            20)
+                show_step 1 1 "性能基准测试"
+                performance_benchmark
+                read -p "按回车继续..."
+                ;;
+            21)
+                show_step 1 1 "邮件告警配置"
+                setup_email_alerts
+                read -p "按回车继续..."
+                ;;
+            22)
+                show_step 1 1 "数据库一键部署"
+                setup_database
+                read -p "按回车继续..."
+                ;;
+            23)
+                show_step 1 1 "开发环境管理"
+                setup_dev_environment
+                read -p "按回车继续..."
+                ;;
+            24)
+                show_step 1 1 "反向代理管理"
+                setup_reverse_proxy
+                read -p "按回车继续..."
+                ;;
+            25)
+                show_step 1 1 "系统快照与恢复"
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                setup_system_snapshot
+                read -p "按回车继续..."
+                ;;
+            26)
+                show_step 1 1 "入侵检测系统"
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                setup_intrusion_detection
+                read -p "按回车继续..."
+                ;;
+            27)
+                show_step 1 1 "流量监控"
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                setup_traffic_monitoring
+                read -p "按回车继续..."
+                ;;
+            28)
+                show_step 1 1 "文件同步服务"
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                setup_file_sync
+                read -p "按回车继续..."
+                ;;
+            e|E)
+                # 扩展功能菜单
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                show_extend_menu
+                ;;
+            l|L)
+                # 日志分析
+                source "$(dirname "$0")/vps_extend_functions.sh"
+                setup_log_analysis
                 read -p "按回车继续..."
                 ;;
             v|V) 
