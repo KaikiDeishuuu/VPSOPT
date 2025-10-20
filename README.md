@@ -1,7 +1,7 @@
 # VPS 服务器优化脚本
 
 > 一键完成 VPS 服务器初始化、安全加固和环境配置  
-> **作者:** Kaiki | **版本:** v2.0 | **更新:** 2025-10-19
+> **作者:** Kaiki | **版本:** v2.1 | **更新:** 2025-10-20
 
 [![GitHub stars](https://img.shields.io/github/stars/KaikiDeishuuu/VPSOPT?style=social)](https://github.com/KaikiDeishuuu/VPSOPT)
 [![GitHub forks](https://img.shields.io/github/forks/KaikiDeishuuu/VPSOPT?style=social)](https://github.com/KaikiDeishuuu/VPSOPT)
@@ -11,7 +11,15 @@
 
 这是一个功能强大的 VPS 服务器一键优化脚本，帮助你快速完成服务器的初始化配置、安全加固和环境部署。
 
+**🆕 v2.1 新增内容：**
+- ✨ Cloudflare Tunnel 配置
+- ✨ Cloudflare WARP 配置  
+- ✨ 网络优化工具集 (DNS/MTU/TCP优化)
+- ✨ ARM64 Debian 12 专用版本
+
 ## 🚀 快速开始
+
+### 通用版本 (x86_64)
 
 ```bash
 # 下载脚本
@@ -23,12 +31,28 @@ chmod +x start.sh
 sudo ./start.sh
 ```
 
+### ARM64 专用版本 🆕
+
+```bash
+# 适用于: 树莓派、甲骨文ARM、AWS Graviton等ARM64设备
+
+# 运行ARM64专用版本
+chmod +x vps_optimize_arm64.sh
+sudo ./vps_optimize_arm64.sh
+```
+
 或者直接下载：
 
 ```bash
+# 通用版本
 wget https://raw.githubusercontent.com/KaikiDeishuuu/VPSOPT/main/vps_optimize.sh
 chmod +x vps_optimize.sh
 sudo ./vps_optimize.sh
+
+# ARM64版本
+wget https://raw.githubusercontent.com/KaikiDeishuuu/VPSOPT/main/vps_optimize_arm64.sh
+chmod +x vps_optimize_arm64.sh
+sudo ./vps_optimize_arm64.sh
 ```
 
 ## ✨ 核心功能
@@ -44,7 +68,7 @@ sudo ./vps_optimize.sh
 - ✅ 安全加固 - Fail2Ban/自动更新
 - ✅ 系统清理 - 缓存/日志/临时文件
 
-### 🚀 环境配置（7 项）🆕
+### 🚀 环境配置（7 项）
 
 - ✨ **Docker 环境** - 一键安装 + 镜像加速
 - ✨ **Nginx + SSL** - Web 服务器 + 自动化证书
@@ -53,6 +77,35 @@ sudo ./vps_optimize.sh
 - ✨ **系统监控** - CPU/内存/磁盘监控
 - ✨ **SSH 优化** - 提升连接速度
 - ✨ **BBR V3 优化** ⭐ - 终极网络性能优化
+
+### 🌐 网络优化工具 🆕
+
+- ☁️ **Cloudflare Tunnel** - 无需公网IP暴露服务
+  - 自动HTTPS加密
+  - DDoS防护
+  - 全球CDN加速
+  - 支持ARM64架构
+
+- 🔒 **Cloudflare WARP** - 网络加速与隐私保护
+  - 官方客户端 (Debian 11+)
+  - wgcf + WireGuard (通用方案)
+  - 基于WireGuard协议
+  - 支持ARM64架构
+
+- 🌐 **网络优化工具集**
+  - DNS优化 (Cloudflare/Google/阿里/腾讯)
+  - MTU优化 (自动检测网络接口)
+  - TCP Fast Open (加速TCP连接)
+  - 网络诊断工具 (mtr/iperf3/tcpdump/speedtest)
+
+### 🔧 ARM64 专用优化 🆕
+
+- 🎯 **架构检测** - 自动识别ARM64/aarch64
+- 📊 **温度监控** - 实时CPU温度监控
+- ⚡ **性能调优** - ARM64专属性能参数
+- 💾 **内存优化** - 根据内存大小自适应
+- 🐳 **Docker ARM64** - 完整支持ARM64镜像
+- 🌡️ **散热提醒** - 温度预警机制
 
 ## 📚 文档导航
 
@@ -91,6 +144,30 @@ sudo ./vps_optimize.sh
 结果: 完整安全 + 环境 + 监控 + 备份
 ```
 
+### 方案 5: Cloudflare 网络优化 🆕
+
+```bash
+通用版本:
+选择: 16 → Cloudflare Tunnel
+选择: 17 → Cloudflare WARP
+选择: 18 → 网络优化工具集
+
+结果: Tunnel代理 + WARP加速 + 网络优化
+```
+
+### 方案 6: ARM64 完整优化 🆕
+
+```bash
+ARM64版本:
+选择: 0 → 一键优化(包含ARM64特定优化)
+或
+选择: 2 → ARM64特定优化
+选择: 3 → Docker ARM64版
+选择: 4 → Cloudflare服务
+
+结果: ARM64性能优化 + 温度监控 + Docker + 网络加速
+```
+
 ## 📊 配置完成后效果
 
 ```
@@ -106,7 +183,9 @@ sudo ./vps_optimize.sh
 ✅ 系统监控：已配置（可选）
 ```
 
-## � 常用命令
+## 🛠️ 常用命令
+
+### 通用版本命令
 
 ```bash
 # 系统管理
@@ -127,6 +206,48 @@ nginx -s reload             # 重载配置
 /usr/local/bin/system_monitor.sh   # 查看监控
 ```
 
+### Cloudflare 工具命令 🆕
+
+```bash
+# Cloudflare Tunnel
+cloudflared tunnel login           # 登录账户
+cloudflared tunnel create NAME     # 创建隧道
+cloudflared tunnel route dns NAME DOMAIN  # 配置DNS
+systemctl status cloudflared       # 查看服务状态
+
+# Cloudflare WARP (官方客户端)
+warp-cli register                  # 注册
+warp-cli connect                   # 连接
+warp-cli disconnect                # 断开
+warp-cli status                    # 查看状态
+
+# WARP (wgcf方式)
+wg-quick up wgcf                   # 启用WARP
+wg-quick down wgcf                 # 停止WARP
+systemctl enable wg-quick@wgcf     # 开机自启
+
+# 网络诊断
+mtr google.com                     # 路由追踪
+iperf3 -s                          # 带宽测试服务器
+speedtest-cli                      # 网速测试
+tcpdump -i eth0                    # 抓包分析
+```
+
+### ARM64 专用命令 🆕
+
+```bash
+# 温度监控
+/usr/local/bin/temp_monitor.sh     # 查看CPU温度
+
+# Docker ARM64
+docker pull arm64v8/镜像名          # 拉取ARM64镜像
+docker run --platform linux/arm64   # 运行ARM64容器
+
+# 系统信息
+uname -m                            # 查看架构
+cat /sys/class/thermal/thermal_zone0/temp  # 读取温度
+```
+
 ## ⚠️ 重要提醒
 
 1. **SSH 端口修改后，先测试新端口连接再断开当前会话**
@@ -134,6 +255,24 @@ nginx -s reload             # 重载配置
 3. **所有配置文件修改前都会自动备份**
 4. **SSL 证书申请前确保域名已正确解析**
 5. **Docker 组权限需要重新登录才能生效**
+6. **ARM64 设备请注意散热，定期检查温度** 🆕
+7. **Cloudflare Tunnel 需要有效的 Cloudflare 账户** 🆕
+8. **WARP 在某些地区可能需要额外配置** 🆕
+
+## 🌟 支持的系统
+
+### 通用版本
+- ✅ Debian 10/11/12 (x86_64)
+- ✅ Ubuntu 20.04/22.04/24.04 (x86_64)
+- ⚠️ 其他 Debian 系发行版（部分功能可能不兼容）
+
+### ARM64 专用版本 🆕
+- ✅ Debian 12 (Bookworm) ARM64
+- ✅ 树莓派 OS (64位)
+- ✅ Ubuntu Server 22.04+ ARM64
+- ✅ 甲骨文云 ARM 实例
+- ✅ AWS Graviton 处理器
+- ✅ 其他 ARM64 Debian/Ubuntu 系统
 
 ## � 获取帮助
 
@@ -144,7 +283,25 @@ nginx -s reload             # 重载配置
 
 ## 🔄 更新日志
 
-**v2.0** (2025-10-19) - [查看详情](docs/CHANGELOG.md)
+**v2.1** (2025-10-20) - [查看详情](docs/CHANGELOG.md)
+
+- ✨ 新增 Cloudflare Tunnel 配置（功能 16）
+- ✨ 新增 Cloudflare WARP 配置（功能 17）
+- ✨ 新增网络优化工具集（功能 18）
+  - DNS 优化支持 5 种服务商
+  - MTU 自动检测与优化
+  - TCP Fast Open 配置
+  - 网络诊断工具安装
+- ✨ 新增 ARM64 Debian 12 专用版本
+  - 架构自动检测
+  - ARM64 性能优化
+  - 温度监控功能
+  - Docker ARM64 支持
+- 🎨 优化菜单布局
+- 📝 完善文档系统
+- 🐛 修复已知问题
+
+**v2.0** (2025-10-19)
 
 - ✨ 新增 7 大实用功能（Docker/Nginx/工具/备份/监控/SSH 优化/BBR V3）
 - 🎨 优化菜单结构和交互体验

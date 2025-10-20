@@ -1600,6 +1600,558 @@ install_bbr_v3() {
     sleep 2
 }
 
+# 16. Cloudflare Tunnel配置
+setup_cloudflare_tunnel() {
+    log_info "开始配置Cloudflare Tunnel..."
+    
+    echo ""
+    echo -e "${YELLOW}Cloudflare Tunnel 说明:${NC}"
+    echo "Cloudflare Tunnel 可以让您的本地服务通过Cloudflare网络安全暴露到互联网"
+    echo ""
+    echo "功能特性:"
+    echo "  - 无需公网IP或开放端口"
+    echo "  - 自动HTTPS加密"
+    echo "  - DDoS防护"
+    echo "  - 全球CDN加速"
+    echo ""
+    
+    read -p "是否安装Cloudflare Tunnel (cloudflared)? (y/n): " install_cf
+    if [[ "$install_cf" != "y" ]]; then
+        log_info "跳过Cloudflare Tunnel安装"
+        return
+    fi
+    
+    # 检测系统架构
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            CF_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            CF_ARCH="arm64"
+            ;;
+        armv7l)
+            CF_ARCH="armhf"
+            ;;
+        *)
+            log_error "不支持的架构: $ARCH"
+            return
+            ;;
+    esac
+    
+    log_info "检测到系统架构: $ARCH (使用 $CF_ARCH 版本)"
+    
+    # 安装cloudflared
+    log_info "下载并安装cloudflared..."
+    
+    # 添加Cloudflare GPG key
+    mkdir -p /usr/share/keyrings
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+    
+    # 添加apt仓库
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflared.list
+    
+    # 安装cloudflared
+    apt-get update >/dev/null 2>&1
+    apt-get install -y cloudflared
+    
+    if command -v cloudflared >/dev/null 2>&1; then
+        log_success "cloudflared 安装成功: $(cloudflared --version)"
+    else
+        log_error "cloudflared 安装失败"
+        return
+    fi
+    
+    # 配置向导
+    echo ""
+    echo -e "${YELLOW}配置选项:${NC}"
+    echo "1) 快速配置 - 通过浏览器登录Cloudflare账户"
+    echo "2) 手动配置 - 使用已有的Tunnel Token"
+    echo "3) 仅安装，稍后配置"
+    read -p "请选择 [1-3]: " cf_config_choice
+    
+    case $cf_config_choice in
+        1)
+            log_info "启动快速配置..."
+            echo ""
+            echo -e "${YELLOW}请按照以下步骤操作:${NC}"
+            echo "1. 运行: cloudflared tunnel login"
+            echo "2. 在浏览器中授权"
+            echo "3. 创建tunnel: cloudflared tunnel create mytunnel"
+            echo "4. 配置路由: cloudflared tunnel route dns mytunnel example.com"
+            echo "5. 创建配置文件 /etc/cloudflared/config.yml"
+            echo "6. 运行: cloudflared tunnel run mytunnel"
+            echo ""
+            log_info "详细文档: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/"
+            ;;
+        2)
+            read -p "请输入Tunnel Token: " tunnel_token
+            if [[ -n "$tunnel_token" ]]; then
+                # 创建systemd服务
+                cat > /etc/systemd/system/cloudflared.service <<EOF
+[Unit]
+Description=Cloudflare Tunnel
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/cloudflared tunnel run --token $tunnel_token
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                
+                systemctl daemon-reload
+                systemctl enable cloudflared
+                systemctl start cloudflared
+                
+                log_success "Cloudflared 服务已启动"
+                log_info "查看状态: systemctl status cloudflared"
+            else
+                log_warning "未输入Token，请手动配置"
+            fi
+            ;;
+        3)
+            log_info "已安装cloudflared，使用以下命令配置:"
+            echo "  cloudflared tunnel login"
+            echo "  cloudflared tunnel create <NAME>"
+            echo "  cloudflared tunnel route dns <NAME> <DOMAIN>"
+            ;;
+    esac
+    
+    log_success "Cloudflare Tunnel配置完成"
+    sleep 2
+}
+
+# 17. Cloudflare WARP配置
+setup_cloudflare_warp() {
+    log_info "开始配置Cloudflare WARP..."
+    
+    echo ""
+    echo -e "${YELLOW}Cloudflare WARP 说明:${NC}"
+    echo "WARP 可以加速网络连接，提供更好的隐私保护"
+    echo ""
+    echo "功能特性:"
+    echo "  - 加速国际网络访问"
+    echo "  - 隐藏真实IP"
+    echo "  - 基于WireGuard协议"
+    echo "  - 免费使用"
+    echo ""
+    
+    read -p "是否配置Cloudflare WARP? (y/n): " install_warp
+    if [[ "$install_warp" != "y" ]]; then
+        log_info "跳过WARP配置"
+        return
+    fi
+    
+    echo ""
+    echo "请选择安装方式:"
+    echo "1) 官方WARP客户端 (推荐，需要Ubuntu 20.04+或Debian 11+)"
+    echo "2) wgcf + WireGuard (兼容性更好，支持所有系统)"
+    read -p "请选择 [1-2]: " warp_method
+    
+    case $warp_method in
+        1)
+            setup_warp_official
+            ;;
+        2)
+            setup_warp_wgcf
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    log_success "WARP配置完成"
+    sleep 2
+}
+
+# WARP官方客户端安装
+setup_warp_official() {
+    log_info "安装官方WARP客户端..."
+    
+    # 添加Cloudflare GPG key
+    curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+    
+    # 添加apt仓库
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+    
+    # 安装
+    apt-get update >/dev/null 2>&1
+    apt-get install -y cloudflare-warp
+    
+    if command -v warp-cli >/dev/null 2>&1; then
+        log_success "WARP客户端安装成功"
+        
+        # 注册和连接
+        echo ""
+        read -p "是否立即注册并连接WARP? (y/n): " connect_now
+        if [[ "$connect_now" == "y" ]]; then
+            log_info "注册WARP..."
+            warp-cli register
+            
+            log_info "连接WARP..."
+            warp-cli connect
+            
+            sleep 3
+            
+            log_info "WARP状态:"
+            warp-cli status
+        fi
+        
+        echo ""
+        echo -e "${YELLOW}常用命令:${NC}"
+        echo "  warp-cli connect     - 连接"
+        echo "  warp-cli disconnect  - 断开"
+        echo "  warp-cli status      - 查看状态"
+        echo "  warp-cli settings    - 查看设置"
+    else
+        log_error "WARP客户端安装失败"
+    fi
+}
+
+# wgcf + WireGuard安装
+setup_warp_wgcf() {
+    log_info "安装wgcf + WireGuard..."
+    
+    # 安装WireGuard
+    log_info "安装WireGuard..."
+    apt-get install -y wireguard-tools
+    
+    # 下载wgcf
+    log_info "下载wgcf..."
+    
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            WGCF_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            WGCF_ARCH="arm64"
+            ;;
+        armv7l)
+            WGCF_ARCH="armv7"
+            ;;
+        *)
+            log_error "不支持的架构: $ARCH"
+            return
+            ;;
+    esac
+    
+    # 获取最新版本
+    WGCF_VERSION=$(curl -s https://api.github.com/repos/ViRb3/wgcf/releases/latest | grep "tag_name" | cut -d'"' -f4)
+    
+    if [[ -z "$WGCF_VERSION" ]]; then
+        log_warning "无法获取最新版本，使用v2.2.18"
+        WGCF_VERSION="v2.2.18"
+    fi
+    
+    log_info "下载wgcf $WGCF_VERSION ($WGCF_ARCH)..."
+    curl -fsSL "https://github.com/ViRb3/wgcf/releases/download/${WGCF_VERSION}/wgcf_${WGCF_VERSION#v}_linux_${WGCF_ARCH}" -o /usr/local/bin/wgcf
+    chmod +x /usr/local/bin/wgcf
+    
+    if command -v wgcf >/dev/null 2>&1; then
+        log_success "wgcf安装成功: $(wgcf version 2>&1 || echo 'installed')"
+    else
+        log_error "wgcf安装失败"
+        return
+    fi
+    
+    # 配置WARP
+    echo ""
+    read -p "是否立即配置WARP? (y/n): " config_now
+    if [[ "$config_now" == "y" ]]; then
+        cd /etc/wireguard || exit
+        
+        log_info "注册WARP账户..."
+        wgcf register
+        
+        log_info "生成WireGuard配置..."
+        wgcf generate
+        
+        # 重命名配置文件
+        if [ -f wgcf-profile.conf ]; then
+            mv wgcf-profile.conf wgcf.conf
+            log_success "配置文件已生成: /etc/wireguard/wgcf.conf"
+            
+            echo ""
+            echo -e "${YELLOW}启用WARP:${NC}"
+            echo "  wg-quick up wgcf"
+            echo ""
+            echo -e "${YELLOW}停止WARP:${NC}"
+            echo "  wg-quick down wgcf"
+            echo ""
+            echo -e "${YELLOW}开机自启:${NC}"
+            echo "  systemctl enable wg-quick@wgcf"
+            echo ""
+            
+            read -p "是否立即启用WARP? (y/n): " enable_now
+            if [[ "$enable_now" == "y" ]]; then
+                wg-quick up wgcf
+                log_success "WARP已启用"
+                
+                read -p "是否设置开机自启? (y/n): " auto_start
+                if [[ "$auto_start" == "y" ]]; then
+                    systemctl enable wg-quick@wgcf
+                    log_success "已设置开机自启"
+                fi
+            fi
+        else
+            log_error "配置文件生成失败"
+        fi
+        
+        cd - >/dev/null || exit
+    fi
+}
+
+# 18. 网络优化工具集
+setup_network_optimization() {
+    log_info "开始配置网络优化工具..."
+    
+    echo ""
+    echo -e "${YELLOW}网络优化工具集:${NC}"
+    echo "1) DNS优化 (配置更快的DNS服务器)"
+    echo "2) MTU优化 (优化网络传输单元)"
+    echo "3) TCP Fast Open (加速TCP连接)"
+    echo "4) 网络诊断工具 (mtr, iperf3, tcpdump)"
+    echo "5) 全部配置"
+    echo "6) 返回"
+    read -p "请选择 [1-6]: " net_choice
+    
+    case $net_choice in
+        1)
+            optimize_dns
+            ;;
+        2)
+            optimize_mtu
+            ;;
+        3)
+            optimize_tcp_fastopen
+            ;;
+        4)
+            install_network_tools
+            ;;
+        5)
+            optimize_dns
+            optimize_mtu
+            optimize_tcp_fastopen
+            install_network_tools
+            ;;
+        6)
+            return
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    log_success "网络优化配置完成"
+    sleep 2
+}
+
+# DNS优化
+optimize_dns() {
+    log_info "配置DNS优化..."
+    
+    echo ""
+    echo "请选择DNS服务器:"
+    echo "1) Cloudflare DNS (1.1.1.1) - 推荐国际用户"
+    echo "2) Google DNS (8.8.8.8) - 稳定可靠"
+    echo "3) 阿里DNS (223.5.5.5) - 推荐国内用户"
+    echo "4) 腾讯DNS (119.29.29.29) - 国内备选"
+    echo "5) 自定义"
+    read -p "请选择 [1-5]: " dns_choice
+    
+    case $dns_choice in
+        1)
+            DNS1="1.1.1.1"
+            DNS2="1.0.0.1"
+            ;;
+        2)
+            DNS1="8.8.8.8"
+            DNS2="8.8.4.4"
+            ;;
+        3)
+            DNS1="223.5.5.5"
+            DNS2="223.6.6.6"
+            ;;
+        4)
+            DNS1="119.29.29.29"
+            DNS2="182.254.116.116"
+            ;;
+        5)
+            read -p "请输入主DNS: " DNS1
+            read -p "请输入备用DNS: " DNS2
+            ;;
+        *)
+            log_warning "无效选项"
+            return
+            ;;
+    esac
+    
+    # 备份原始配置
+    cp /etc/resolv.conf /etc/resolv.conf.backup.$(date +%Y%m%d_%H%M%S)
+    
+    # 配置DNS
+    cat > /etc/resolv.conf <<EOF
+# DNS配置 - 由VPS优化脚本配置
+nameserver $DNS1
+nameserver $DNS2
+
+# 选项
+options timeout:2
+options attempts:3
+options rotate
+options single-request-reopen
+EOF
+    
+    # 防止被覆盖
+    chattr +i /etc/resolv.conf 2>/dev/null || log_warning "无法锁定resolv.conf"
+    
+    log_success "DNS已配置: $DNS1, $DNS2"
+    
+    # 测试DNS
+    echo ""
+    log_info "测试DNS解析..."
+    if nslookup google.com >/dev/null 2>&1; then
+        log_success "DNS解析正常"
+    else
+        log_warning "DNS解析可能存在问题"
+    fi
+}
+
+# MTU优化
+optimize_mtu() {
+    log_info "配置MTU优化..."
+    
+    # 获取默认网络接口
+    DEFAULT_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+    
+    if [[ -z "$DEFAULT_INTERFACE" ]]; then
+        log_error "无法检测默认网络接口"
+        return
+    fi
+    
+    log_info "检测到默认网络接口: $DEFAULT_INTERFACE"
+    
+    # 当前MTU
+    CURRENT_MTU=$(ip link show "$DEFAULT_INTERFACE" | grep mtu | awk '{print $5}')
+    log_info "当前MTU: $CURRENT_MTU"
+    
+    echo ""
+    echo "MTU优化建议:"
+    echo "  - PPPoE连接: 1492"
+    echo "  - 以太网: 1500 (默认)"
+    echo "  - Jumbo帧: 9000 (局域网)"
+    echo "  - VPN/隧道: 1400-1450"
+    echo ""
+    
+    read -p "是否修改MTU? (y/n): " change_mtu
+    if [[ "$change_mtu" != "y" ]]; then
+        return
+    fi
+    
+    read -p "请输入新的MTU值 [1400-1500]: " new_mtu
+    
+    if [[ "$new_mtu" =~ ^[0-9]+$ ]] && [ "$new_mtu" -ge 1200 ] && [ "$new_mtu" -le 9000 ]; then
+        # 临时设置
+        ip link set "$DEFAULT_INTERFACE" mtu "$new_mtu"
+        
+        # 永久设置
+        if [ -f /etc/network/interfaces ]; then
+            if grep -q "mtu" /etc/network/interfaces; then
+                sed -i "s/mtu .*/mtu $new_mtu/" /etc/network/interfaces
+            else
+                echo "    mtu $new_mtu" >> /etc/network/interfaces
+            fi
+        fi
+        
+        # 对于systemd-networkd
+        if [ -d /etc/systemd/network ]; then
+            cat > /etc/systemd/network/10-mtu.link <<EOF
+[Match]
+Name=$DEFAULT_INTERFACE
+
+[Link]
+MTUBytes=$new_mtu
+EOF
+        fi
+        
+        log_success "MTU已设置为: $new_mtu"
+    else
+        log_error "无效的MTU值"
+    fi
+}
+
+# TCP Fast Open优化
+optimize_tcp_fastopen() {
+    log_info "配置TCP Fast Open..."
+    
+    # 检查当前状态
+    CURRENT_TFO=$(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null || echo "0")
+    log_info "当前TCP Fast Open值: $CURRENT_TFO"
+    
+    echo ""
+    echo "TCP Fast Open说明:"
+    echo "  0 = 禁用"
+    echo "  1 = 仅作为客户端"
+    echo "  2 = 仅作为服务器"
+    echo "  3 = 客户端和服务器 (推荐)"
+    echo ""
+    
+    read -p "是否启用TCP Fast Open? (y/n): " enable_tfo
+    if [[ "$enable_tfo" != "y" ]]; then
+        return
+    fi
+    
+    # 设置为3 (客户端+服务器)
+    sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1
+    
+    # 写入配置文件
+    if ! grep -q "net.ipv4.tcp_fastopen" /etc/sysctl.d/99-custom.conf 2>/dev/null; then
+        echo "net.ipv4.tcp_fastopen = 3" >> /etc/sysctl.d/99-custom.conf
+    else
+        sed -i 's/net.ipv4.tcp_fastopen.*/net.ipv4.tcp_fastopen = 3/' /etc/sysctl.d/99-custom.conf
+    fi
+    
+    log_success "TCP Fast Open已启用"
+}
+
+# 安装网络诊断工具
+install_network_tools() {
+    log_info "安装网络诊断工具..."
+    
+    echo ""
+    echo "将安装以下工具:"
+    echo "  - mtr: 网络路由追踪"
+    echo "  - iperf3: 带宽测试"
+    echo "  - tcpdump: 数据包分析"
+    echo "  - speedtest-cli: 网速测试"
+    echo ""
+    
+    read -p "是否继续? (y/n): " install_tools
+    if [[ "$install_tools" != "y" ]]; then
+        return
+    fi
+    
+    apt-get install -y mtr iperf3 tcpdump speedtest-cli
+    
+    log_success "网络诊断工具安装完成"
+    
+    echo ""
+    echo -e "${YELLOW}使用示例:${NC}"
+    echo "  mtr google.com           - 路由追踪"
+    echo "  iperf3 -s                - 启动带宽测试服务器"
+    echo "  iperf3 -c <server_ip>    - 带宽测试客户端"
+    echo "  speedtest-cli            - 测试网速"
+    echo "  tcpdump -i eth0          - 抓包分析"
+}
+
 # 验证配置
 verify_setup() {
     show_header
@@ -1781,10 +2333,11 @@ show_menu() {
         echo -e "  ${YELLOW}┌─────────────────────────────────────────────────────────┐${NC}"
         echo -e "  ${YELLOW}│${NC} ${BOLD}${YELLOW}🌟 环境配置${NC}                                            ${YELLOW}│${NC}"
         echo -e "  ${YELLOW}└─────────────────────────────────────────────────────────┘${NC}"
-        echo -e "    ${BOLD}9${NC})  🐳 Docker环境配置            ${BOLD}13${NC}) 📊 配置系统监控告警"
-        echo -e "    ${BOLD}10${NC}) 🌐 Nginx配置与SSL证书        ${BOLD}14${NC}) ⚡ 优化SSH连接速度"
-        echo -e "    ${BOLD}11${NC}) 🛠️  安装常用工具             ${BOLD}15${NC}) ${RED}${BOLD}🚀 BBR V3 终极优化 ⭐${NC}"
-        echo -e "    ${BOLD}12${NC}) 💾 配置自动备份"
+        echo -e "    ${BOLD}9${NC})  🐳 Docker环境配置            ${BOLD}14${NC}) ⚡ 优化SSH连接速度"
+        echo -e "    ${BOLD}10${NC}) 🌐 Nginx配置与SSL证书        ${BOLD}15${NC}) ${RED}${BOLD}🚀 BBR V3 终极优化 ⭐${NC}"
+        echo -e "    ${BOLD}11${NC}) 🛠️  安装常用工具             ${BOLD}16${NC}) ${CYAN}${BOLD}☁️  Cloudflare Tunnel 🆕${NC}"
+        echo -e "    ${BOLD}12${NC}) 💾 配置自动备份              ${BOLD}17${NC}) ${CYAN}${BOLD}🔒 Cloudflare WARP 🆕${NC}"
+        echo -e "    ${BOLD}13${NC}) 📊 配置系统监控告警          ${BOLD}18${NC}) ${CYAN}${BOLD}🌐 网络优化工具集 🆕${NC}"
         echo ""
         echo -e "  ${PURPLE}┌─────────────────────────────────────────────────────────┐${NC}"
         echo -e "  ${PURPLE}│${NC} ${BOLD}${PURPLE}📚 其他选项${NC}                                            ${PURPLE}│${NC}"
@@ -1992,6 +2545,21 @@ show_menu() {
             15) 
                 show_step 1 1 "BBR V3 终极优化"
                 install_bbr_v3 
+                read -p "按回车继续..."
+                ;;
+            16) 
+                show_step 1 1 "Cloudflare Tunnel配置"
+                setup_cloudflare_tunnel 
+                read -p "按回车继续..."
+                ;;
+            17) 
+                show_step 1 1 "Cloudflare WARP配置"
+                setup_cloudflare_warp 
+                read -p "按回车继续..."
+                ;;
+            18) 
+                show_step 1 1 "网络优化工具集"
+                setup_network_optimization 
                 read -p "按回车继续..."
                 ;;
             v|V) 
